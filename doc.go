@@ -36,7 +36,7 @@ world!":
   package main
 
   import (
-  	"github.com/rivo/tview"
+  	"github.com/tslocum/tview"
   )
 
   func main() {

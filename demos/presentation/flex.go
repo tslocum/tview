@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/gdamore/tcell"
-	"github.com/rivo/tview"
+	"github.com/tslocum/tview"
 )
 
 // Flex demonstrates flexbox layout.
