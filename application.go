@@ -36,8 +36,6 @@ type queuedUpdate struct {
 //       panic(err)
 //   }
 type Application struct {
-	sync.RWMutex
-
 	// The application's screen. Apart from Run(), this variable should never be
 	// set directly. Always use the screenReplacement channel after calling
 	// Fini(), to set a new screen (or nil to stop the application).
@@ -76,6 +74,8 @@ type Application struct {
 	// (screen.Init() and draw() will be called implicitly). A value of nil will
 	// stop the application.
 	screenReplacement chan tcell.Screen
+
+	sync.RWMutex
 }
 
 // NewApplication creates and returns a new application.
@@ -97,6 +97,9 @@ func NewApplication() *Application {
 // itself: Such a handler can intercept the Ctrl-C event which closes the
 // application.
 func (a *Application) SetInputCapture(capture func(event *tcell.EventKey) *tcell.EventKey) *Application {
+	a.Lock()
+	defer a.Unlock()
+
 	a.inputCapture = capture
 	return a
 }
@@ -104,6 +107,9 @@ func (a *Application) SetInputCapture(capture func(event *tcell.EventKey) *tcell
 // GetInputCapture returns the function installed with SetInputCapture() or nil
 // if no such function has been installed.
 func (a *Application) GetInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
+	a.RLock()
+	defer a.RUnlock()
+
 	return a.inputCapture
 }
 
@@ -299,6 +305,7 @@ EventLoop:
 func (a *Application) Stop() {
 	a.Lock()
 	defer a.Unlock()
+
 	screen := a.screen
 	if screen == nil {
 		return
@@ -367,7 +374,6 @@ func (a *Application) ForceDraw() *Application {
 // draw actually does what Draw() promises to do.
 func (a *Application) draw() *Application {
 	a.Lock()
-	defer a.Unlock()
 
 	screen := a.screen
 	root := a.root
@@ -377,6 +383,7 @@ func (a *Application) draw() *Application {
 
 	// Maybe we're not ready yet or not anymore.
 	if screen == nil || root == nil {
+		a.Unlock()
 		return a
 	}
 
@@ -388,10 +395,13 @@ func (a *Application) draw() *Application {
 
 	// Call before handler if there is one.
 	if before != nil {
+		a.Unlock()
 		if before(screen) {
 			screen.Show()
 			return a
 		}
+	} else {
+		a.Unlock()
 	}
 
 	// Draw all primitives.
@@ -418,6 +428,9 @@ func (a *Application) draw() *Application {
 //
 // Provide nil to uninstall the callback function.
 func (a *Application) SetBeforeDrawFunc(handler func(screen tcell.Screen) bool) *Application {
+	a.Lock()
+	defer a.Unlock()
+
 	a.beforeDraw = handler
 	return a
 }
@@ -425,6 +438,9 @@ func (a *Application) SetBeforeDrawFunc(handler func(screen tcell.Screen) bool) 
 // GetBeforeDrawFunc returns the callback function installed with
 // SetBeforeDrawFunc() or nil if none has been installed.
 func (a *Application) GetBeforeDrawFunc() func(screen tcell.Screen) bool {
+	a.RLock()
+	defer a.RUnlock()
+
 	return a.beforeDraw
 }
 
@@ -433,6 +449,9 @@ func (a *Application) GetBeforeDrawFunc() func(screen tcell.Screen) bool {
 //
 // Provide nil to uninstall the callback function.
 func (a *Application) SetAfterDrawFunc(handler func(screen tcell.Screen)) *Application {
+	a.Lock()
+	defer a.Unlock()
+
 	a.afterDraw = handler
 	return a
 }
@@ -440,6 +459,9 @@ func (a *Application) SetAfterDrawFunc(handler func(screen tcell.Screen)) *Appli
 // GetAfterDrawFunc returns the callback function installed with
 // SetAfterDrawFunc() or nil if none has been installed.
 func (a *Application) GetAfterDrawFunc() func(screen tcell.Screen) {
+	a.RLock()
+	defer a.RUnlock()
+
 	return a.afterDraw
 }
 
@@ -504,13 +526,11 @@ func (a *Application) SetFocus(p Primitive) *Application {
 func (a *Application) GetFocus() Primitive {
 	a.RLock()
 	defer a.RUnlock()
+
 	return a.focus
 }
 
-// QueueUpdate is used to synchronize access to primitives from non-main
-// goroutines. The provided function will be executed as part of the event loop
-// and thus will not cause race conditions with other such update functions or
-// the Draw() function.
+// QueueUpdate queues a function to be executed as part of the event loop.
 //
 // Note that Draw() is not implicitly called after the execution of f as that
 // may not be desirable. You can call Draw() from f if the screen should be

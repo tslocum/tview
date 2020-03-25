@@ -140,29 +140,10 @@ This package supports unicode characters including wide characters.
 
 Concurrency
 
-Many functions in this package are not thread-safe. For many applications, this
-may not be an issue: If your code makes changes in response to key events, it
-will execute in the main goroutine and thus will not cause any race conditions.
-
-If you access your primitives from other goroutines, however, you will need to
-synchronize execution. The easiest way to do this is to call
-Application.QueueUpdate() or Application.QueueUpdateDraw() (see the function
-documentation for details):
-
-  go func() {
-    app.QueueUpdateDraw(func() {
-      table.SetCellSimple(0, 0, "Foo bar")
-    })
-  }()
-
-One exception to this is the io.Writer interface implemented by TextView. You
-can safely write to a TextView from any goroutine. See the TextView
-documentation for details.
-
-You can also call Application.Draw() from any goroutine without having to wrap
-it in QueueUpdate(). And, as mentioned above, key event callbacks are executed
-in the main goroutine and thus should not use QueueUpdate() as that may lead to
-deadlocks.
+All functions may be called concurrently (they are thread-safe). When called
+from multiple threads, functions will block until the application or widget
+becomes available. Function calls may be queued with Application.QueueUpdate to
+avoid blocking.
 
 Type Hierarchy
 
